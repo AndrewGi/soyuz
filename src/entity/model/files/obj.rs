@@ -4,6 +4,8 @@ use std::borrow::Cow;
 use std::io::BufRead;
 use std::num::{NonZeroU32, ParseFloatError, ParseIntError};
 use std::str::FromStr;
+use tokio::io::AsyncBufReadExt;
+
 #[derive(Debug)]
 pub enum Error {
     IO(std::io::Error),
@@ -268,7 +270,16 @@ impl ObjectBuilder {
         let mut obj = Self::new();
         let file = tokio::fs::File::open(filename).await?;
         let file = tokio::io::BufReader::new(file);
-
+        let mut lines = file.lines();
+        loop {
+            let result = lines.next_line().await;
+            let result = result?;
+            let actual_line = match result {
+                Some(line) => Line::process_line(&line)?.to_static(),
+                None => break,
+            };
+            obj.process_line(actual_line)?;
+        }
         Ok(obj)
     }
 }
