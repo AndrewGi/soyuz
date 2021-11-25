@@ -1,15 +1,20 @@
+use crate::entity::model;
 use crate::entity::model::files::obj::Error::MissingTag;
 use std::borrow::Cow;
+use std::io::BufRead;
 use std::num::{NonZeroU32, ParseFloatError, ParseIntError};
 use std::str::FromStr;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum Error {
+    IO(std::io::Error),
     MissingTag,
     UnrecognizedTag,
     ParseIntError(ParseIntError),
     ParseFloatError(ParseFloatError),
     MissingNumber,
+    MissingNormal,
+    MissingTextureCoord,
+    InvalidIndex,
 }
 impl From<ParseIntError> for Error {
     fn from(e: ParseIntError) -> Self {
@@ -19,6 +24,11 @@ impl From<ParseIntError> for Error {
 impl From<ParseFloatError> for Error {
     fn from(e: ParseFloatError) -> Self {
         Error::ParseFloatError(e)
+    }
+}
+impl From<std::io::Error> for Error {
+    fn from(e: std::io::Error) -> Self {
+        Error::IO(e)
     }
 }
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Default, Hash)]
@@ -146,5 +156,119 @@ impl<'a> Line<'a> {
             })),
             _ => Err(Error::UnrecognizedTag),
         }
+    }
+}
+
+pub struct ObjectBuilder {
+    pub vertices: Vec<Vertex>,
+    pub normals: Vec<Vertex>,
+    pub texture_coords: Vec<TextureCoords>,
+    pub indices: Vec<VertexIndices>,
+
+    pub mesh_vertices: Vec<model::Vertex>,
+    pub mesh_indices: Vec<u32>,
+}
+impl ObjectBuilder {
+    pub fn new() -> Self {
+        ObjectBuilder {
+            vertices: vec![],
+            normals: vec![],
+            texture_coords: vec![],
+            indices: vec![],
+            mesh_vertices: vec![],
+            mesh_indices: vec![],
+        }
+    }
+    pub fn handle_face(
+        &mut self,
+        v1: VertexIndices,
+        v2: VertexIndices,
+        v3: VertexIndices,
+    ) -> Result<(), Error> {
+        if v1.texture_coords.is_some() != v2.texture_coords.is_some()
+            || v2.texture_coords.is_some() != v3.texture_coords.is_some()
+        {
+            return Err(Error::MissingTextureCoord);
+        }
+        if v1.normal.is_some() != v2.normal.is_some() || v2.normal.is_some() != v3.normal.is_some()
+        {
+            return Err(Error::MissingNormal);
+        }
+        let v1 = self.get_vertex(v1).ok_or(Error::InvalidIndex)?;
+        let v2 = self.get_vertex(v2).ok_or(Error::InvalidIndex)?;
+        let v3 = self.get_vertex(v3).ok_or(Error::InvalidIndex)?;
+
+        let v1_i = self.add_vertex(v1);
+        let v2_i = self.add_vertex(v2);
+        let v3_i = self.add_vertex(v3);
+
+        self.mesh_indices.push(v1_i);
+        self.mesh_indices.push(v2_i);
+        self.mesh_indices.push(v3_i);
+        Ok(())
+    }
+    pub fn add_vertex(&mut self, v: model::Vertex) -> u32 {
+        let existing_pos = self.mesh_vertices.iter().position(|vi| vi == &v);
+        let pos = match existing_pos {
+            Some(pos) => pos,
+            None => {
+                let pos = self.mesh_vertices.len();
+                self.mesh_vertices.push(v);
+                pos
+            }
+        };
+        pos as u32
+    }
+    pub fn get_vertex(&self, v: VertexIndices) -> Option<model::Vertex> {
+        let default_vertex = Vertex::default();
+        let default_tc = TextureCoords::default();
+        let vertex: &Vertex = self.vertices.get(v.position as usize)?;
+        let normal: &Vertex = match v.normal {
+            Some(ni) => self.normals.get(ni.get() as usize)?,
+            None => &default_vertex,
+        };
+        let texture_coords: &TextureCoords = match v.texture_coords {
+            Some(ti) => self.texture_coords.get(ti.get() as usize)?,
+            None => &default_tc,
+        };
+        Some(model::Vertex {
+            position: [vertex.x, vertex.y, vertex.z],
+            normal: [normal.x, normal.y, normal.z],
+            texture_coords: [texture_coords.u, texture_coords.v],
+        })
+    }
+    pub fn process_line<'a>(&mut self, line: Line<'a>) -> Result<(), Error> {
+        match line {
+            Line::Vertex(v) => self.vertices.push(v),
+            Line::Normal(n) => self.normals.push(n),
+            Line::TextureCoords(tc) => self.texture_coords.push(tc),
+            Line::Face(v1, v2, v3) => self.handle_face(v1, v2, v3)?,
+
+            Line::Point(_) => todo!("handle obj point"),
+            Line::Line(_, _) => todo!("handle obj line"),
+            Line::SmoothingGroup(_) => todo!("handle obj smoothing group"),
+            Line::Group(_) => todo!("handle obj group"),
+            Line::UseMtl(_) => todo!("handle obj usemtl"),
+            Line::MtlLib(_) => todo!("handle obj mtllib"),
+            Line::Name(_) => todo!("handle obj name"),
+            Line::Comment(_) => todo!("handle obj comment"),
+        }
+        Ok(())
+    }
+    pub fn process_lines<'a>(
+        &mut self,
+        mut lines: impl Iterator<Item = Line<'a>>,
+    ) -> Result<(), Error> {
+        while let Some(line) = lines.next() {
+            self.process_line(line)?;
+        }
+        Ok(())
+    }
+    pub async fn load_file(filename: impl AsRef<std::path::Path>) -> Result<Self, Error> {
+        let mut obj = Self::new();
+        let file = tokio::fs::File::open(filename).await?;
+        let file = tokio::io::BufReader::new(file);
+
+        Ok(obj)
     }
 }

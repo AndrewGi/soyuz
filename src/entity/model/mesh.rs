@@ -1,5 +1,12 @@
 pub struct Mesh {
-    pub vertices: Vec<f32>,
-    pub indices: Vec<u32>,
-
+    vertex_buffer: wgpu::Buffer,
+    indices_buffer: wgpu::Buffer,
+}
+impl Mesh {
+    pub fn new(vertex_buffer: wgpu::Buffer, indices_buffer: wgpu::Buffer) -> Mesh {
+        Mesh {
+            vertex_buffer,
+            indices_buffer,
+        }
+    }
 }
