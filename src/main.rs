@@ -7,12 +7,13 @@ use winit::{
     event_loop::{ControlFlow, EventLoop},
     window::WindowBuilder,
 };
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
     let mut state = pollster::block_on(state::State::new(&window))?;
+    let obj = entity::model::files::obj::ObjectBuilder::load_file("cube.obj").await?;
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent {
             ref event,

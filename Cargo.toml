@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = {version = "1.13.*", features=["fs", "rt-multi-thread", "io-util"]}
+tokio = {version = "1.13.*", features=["fs", "rt-multi-thread", "io-util", "macros"]}
 derive_more = "0.99.*"
 wgpu = "0.11.*"
 bytemuck = {version = "1.7.*", features=["derive"]}

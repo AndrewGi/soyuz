@@ -5,7 +5,7 @@ struct VertexOutput {
 };
 
 [[stage(vertex)]]
-fn main(
+fn vs_main(
     [[builtin(vertex_index)]] in_vertex_index: u32,
 ) -> VertexOutput {
     var out: VertexOutput;
@@ -18,6 +18,6 @@ fn main(
 // Fragment shader
 
 [[stage(fragment)]]
-fn main([[builtin(position)]] coord_in: vec4<f32>) -> [[location(0)]] vec4<f32> {
-     return vec4<f32>(in.clip_position.x*2., 0.2, 0.1, 1.0);
- }
+fn fs_main(in: VertexOutput) -> [[location(0)]] vec4<f32> {
+    return vec4<f32>(0.3, 0.2, 0.1, 1.0);
+}

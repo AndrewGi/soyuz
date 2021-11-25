@@ -1,7 +1,7 @@
 use crate::entity::model;
 use crate::entity::model::files::obj::Error::MissingTag;
 use std::borrow::Cow;
-use std::io::BufRead;
+use std::fmt::{Display, Formatter};
 use std::num::{NonZeroU32, ParseFloatError, ParseIntError};
 use std::str::FromStr;
 use tokio::io::AsyncBufReadExt;
@@ -33,6 +33,14 @@ impl From<std::io::Error> for Error {
         Error::IO(e)
     }
 }
+
+impl Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&self, f)
+    }
+}
+
+impl std::error::Error for Error {}
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Default, Hash)]
 pub struct VertexIndices {
     pub position: u32,
@@ -239,7 +247,7 @@ impl ObjectBuilder {
             texture_coords: [texture_coords.u, texture_coords.v],
         })
     }
-    pub fn process_line<'a>(&mut self, line: Line<'a>) -> Result<(), Error> {
+    pub fn process_line(&mut self, line: Line) -> Result<(), Error> {
         match line {
             Line::Vertex(v) => self.vertices.push(v),
             Line::Normal(n) => self.normals.push(n),
@@ -254,15 +262,6 @@ impl ObjectBuilder {
             Line::MtlLib(_) => todo!("handle obj mtllib"),
             Line::Name(_) => todo!("handle obj name"),
             Line::Comment(_) => todo!("handle obj comment"),
-        }
-        Ok(())
-    }
-    pub fn process_lines<'a>(
-        &mut self,
-        mut lines: impl Iterator<Item = Line<'a>>,
-    ) -> Result<(), Error> {
-        while let Some(line) = lines.next() {
-            self.process_line(line)?;
         }
         Ok(())
     }
